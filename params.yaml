@@ -26,7 +26,7 @@ moment_inertia: .04712 # kg m^2 (estimated as a rectangle with width and height 
 update_pose_rate: 0.02
 
 # Lidar simulation parameters
-scan_beams: 1152
+scan_beams: 720
 scan_field_of_view: 6.2831853 #4.71 # radians
 scan_range: 12.0
 

@@ -8,8 +8,8 @@ from    tokenize import Double
 import  numpy as np
 import  time
 
-import  rclpy
-from    rclpy.node import Node
+#import  rclpy
+#from    rclpy.node import Node
 
 from    numpy import array, dot
 from    quadprog import solve_qp
