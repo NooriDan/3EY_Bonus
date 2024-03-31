@@ -2,23 +2,34 @@
 from    __future__ import print_function
 from    lib2to3.pytree import Node
 import  sys
+import  os
 import  math
 from    tokenize import Double
 import  numpy as np
 import  time
 
+import  rclpy
+from    rclpy.node import Node
+
 from    numpy import array, dot
 from    quadprog import solve_qp
 
-from    cv_bridge import CvBridge
+from    cv_bridge import CvBridge, CvBridgeError
 import  cv2
 
+import pyrealsense2 as rs2
+if (not hasattr(rs2, 'intrinsics')):
+    import pyrealsense2.pyrealsense2 as rs2
 
 #ROS Imports
 import rospy
 
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import CameraInfo, Image
+
+# import sensor_msgs.point_cloud2 as pc2
+
+
 # CameraInfo Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/CameraInfo.html
     # std_msgs/Header header
     # uint32 height
@@ -46,8 +57,6 @@ from sensor_msgs.msg import CameraInfo, Image
     # uint32 seq
     # time stamp
     # string frame_id
-import sensor_msgs.point_cloud2 as pc2
-
 
 from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 from nav_msgs.msg import Odometry
@@ -63,8 +72,8 @@ class GapBarrier:
         drive_topic = rospy.get_param('~nav_drive_topic')
         odom_topic=rospy.get_param('~odom_topic')
 
-        cam_info = rospy.get_param('~camera_info')
-        cam_img_raw = rospy.get_param('~img_raw')
+        depth_info_topic  = rospy.get_param('~camera_info')
+        depth_image_topic = rospy.get_param('~img_raw')
         # cam_meta = rospy.get_param('~camera_metadata')
 
         self.use_camera = rospy.get_param('~use_camera')
@@ -103,7 +112,6 @@ class GapBarrier:
         self.velocity_zero=rospy.get_param('~velocity_zero')
         self.optim_mode=rospy.get_param('~optim_mode')
 
- 
 
         # Subscriptions
             # Syntax -> rospy.Subscriber("topic", type, callback)
@@ -112,9 +120,11 @@ class GapBarrier:
         rospy.Subscriber(lidarscan_topic, LaserScan, self.lidar_callback,queue_size=1)
         rospy.Subscriber(odom_topic, Odometry, self.odom_callback,queue_size=1)
 
-        rospy.Subscriber(cam_img_raw, Image, self.cam_img_raw_callback, queue_size=1)
-        rospy.Subscriber(cam_info, CameraInfo, self.cam_img_raw_callback, queue_size=1)
+        rospy.Subscriber(depth_image_topic, Image, self.imageDepthCallback, queue_size=1)
+        rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback, queue_size=1)
         #rospy.Subscriber(cam_meta, Image, self.cam_img_raw_callback, queue_size=1) # not sure about the "came_meta" message type
+        confidence_topic = depth_image_topic.replace('depth', 'confidence')
+        rospy.Subscriber(confidence_topic, Image, self.imageDepthInfoCallback, queue_size=1)
 
         
         # Publishers
@@ -155,6 +165,9 @@ class GapBarrier:
         self.depth_image    = None
         self.depth_proc     = None
         self.bridge         = CvBridge()
+        self.intrinsics     = None
+        self.pix            = None
+        self.pix_grade      = None
 
 
 
@@ -557,34 +570,66 @@ class GapBarrier:
         drive_msg.drive.speed = velocity
         self.drive_pub.publish(drive_msg)
 
-    def cam_img_raw_callback(self, data):
-        # the callback function assigned to cam_img_raw topic
 
+# start of camera callback functions
+
+    def imageDepthCallback(self, data):
         try:
-            self.depth_image = self.bridge.imgmsg_to_cv2(data)
-            self.depth_proc = self.convert_to_polar(self.depth_image)
+            cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
+            # pick one pixel among all the pixels with the closest range:
+            indices = np.array(np.where(cv_image == cv_image[cv_image > 0].min()))[:,0]
+            pix = (indices[1], indices[0])
+            self.pix = pix
+            line = '\rDepth at pixel(%3d, %3d): %7.1f(mm).' % (pix[0], pix[1], cv_image[pix[1], pix[0]])
+
+            if self.intrinsics:
+                depth = cv_image[pix[1], pix[0]]
+                result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [pix[0], pix[1]], depth)
+                line += '  Coordinate: %8.2f %8.2f %8.2f.' % (result[0], result[1], result[2])
+            if (not self.pix_grade is None):
+                line += ' Grade: %2d' % self.pix_grade
+            line += '\r'
+            sys.stdout.write(line)
+            sys.stdout.flush()
 
         except CvBridgeError as e:
             print(e)
-        
-        return None
-    
-    def convert_to_polar(self, depth_image):
-        # Convert Cartesian coordinates to polar coordinates
-        height, width = depth_image.shape
-        polar_image = np.zeros((height, width), dtype=np.uint8)
-        center = (width // 2, height // 2)
+            return
+        except ValueError as e:
+            return
 
-        for y in range(height):
-            for x in range(width):
-                rho = np.sqrt((x - center[0])**2 + (y - center[1])**2)
-                theta = np.arctan2(y - center[1], x - center[0])
-                polar_x = int(rho)
-                polar_y = int((theta + np.pi) * (height / (2 * np.pi)))
-                if 0 <= polar_x < height and 0 <= polar_y < width:
-                    polar_image[polar_y, polar_x] = depth_image[y, x]
+    def confidenceCallback(self, data):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
+            grades = np.bitwise_and(cv_image >> 4, 0x0f)
+            if (self.pix):
+                self.pix_grade = grades[self.pix[1], self.pix[0]]
+        except CvBridgeError as e:
+            print(e)
+            return
 
-        return polar_image
+
+
+    def imageDepthInfoCallback(self, cameraInfo):
+        try:
+            if self.intrinsics:
+                return
+            self.intrinsics = rs2.intrinsics()
+            self.intrinsics.width = cameraInfo.width
+            self.intrinsics.height = cameraInfo.height
+            self.intrinsics.ppx = cameraInfo.k[2]
+            self.intrinsics.ppy = cameraInfo.k[5]
+            self.intrinsics.fx = cameraInfo.k[0]
+            self.intrinsics.fy = cameraInfo.k[4]
+            if cameraInfo.distortion_model == 'plumb_bob':
+                self.intrinsics.model = rs2.distortion.brown_conrady
+            elif cameraInfo.distortion_model == 'equidistant':
+                self.intrinsics.model = rs2.distortion.kannala_brandt4
+            self.intrinsics.coeffs = [i for i in cameraInfo.d]
+        except CvBridgeError as e:
+            print(e)
+            return   
+
 
     def odom_callback(self, odom_msg):
         # update current speed

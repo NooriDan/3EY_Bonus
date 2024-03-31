@@ -74,8 +74,14 @@
   </node>
 
 
-  <!-- Launch the camera node -->
-  <include file="$(find realsense2_camera)/launch/rs_camera.launch"/>
+<!-- Launch the camera node -->
+<include file="$(find realsense2_camera)/launch/rs_camera.launch">
+  <arg name="filters"                   value="hole_filling"/>
+  <!-- <arg name="enable_pointcloud"         default="true"/> -->
+  <!-- <arg name="enable_sync"               default="true"/> -->
+  <arg name="depth_fps"                value = "15"/>
+
+</include>
 
 
   <!-- Launch the navigation node -->
@@ -83,7 +89,7 @@
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
 
-  <!-- Launch the navigation node -->
+  <!-- Launch the collision_assistance node -->
   <node pkg="f1tenth_simulator" name="collision_assistance" type="collision_assistance.py" output="screen">
     <rosparam command="load" file="$(find f1tenth_simulator)/params.yaml"/>
   </node>
