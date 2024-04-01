@@ -188,6 +188,16 @@ optim_mode: 0
 
 # Camera Parameters
 use_camera: 1     # use the camera depth data (1) else do not
-min_depth: 0.300    # m
+min_depth: 0.200    # m
 max_depth: 2.000   # m
 cam_baselink_offset: 0.270 #m
+cam_FOV_horizonal: rad(86*pi/180)   # in deg, HFOV in the datasheet
+
+# the following are defined in number of pixels
+image_width:  848
+image_height: 480
+
+roi_x_lower: 150
+roi_x_upper: 650
+roi_y_lower: 100
+roi_y_upper: 300

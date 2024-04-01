@@ -3,13 +3,14 @@ clear
 clc
 cla
 
-image_rect_raw = load("image_rect_raw.txt");
+%image_rect_raw = load("/Users/danialnoorizadeh/Library/CloudStorage/OneDrive-Personal/Documents/McMaster/3EY4/Labs/Bonus/test/rect_WALLS.txt");
+image_rect_raw = load("/Users/danialnoorizadeh/Library/CloudStorage/OneDrive-Personal/Documents/McMaster/3EY4/Labs/Bonus/test/image_rect_raw.txt");
 
 
 height = 480;
 width = 848;
 
-max_distance = 2000;            % in mm
+max_distance = 3000;            % in mm
 min_noneZero_distance = 300;    % in mm
 
 depth_image = zeros(height, width);
@@ -62,8 +63,8 @@ z = zeros(1, countNoneZero);
 center_height = height/2;
 center_width = width/2;
 
-FOV_horizontal  = 40; % in deg
-FOV_vertical    = 30; % in deg
+FOV_horizontal  = 86; % in deg
+FOV_vertical    = 0; % in deg
 
 % FOV_horizontal_step = FOV_horizontal/width;
 % FOV_vertical_step = FOV_vertical/height;
@@ -84,13 +85,13 @@ for j = 1: width
         if(depth_image(i,j) ~= 0)
            
             theta   = FOV_horizontal_vector(j);
-            phi     = FOV_vertical_vector(i);
+            % phi     = FOV_vertical_vector(i);
             r       = depth_image(i,j);
 
             % Convert spherical coordinates to Cartesian coordinates
-            x(i+j-1) = r * sin(theta) * cos(phi);
-            y(i+j-1) = r * sin(theta) * sin(phi);
-            z(i+j-1) = r * cos(theta); 
+            x(i+j-1) = j/width;
+            y(i+j-1) = i/height;
+            z(i+j-1) = r; 
         end
 
     end
@@ -101,10 +102,20 @@ end
 % Image processing
 % imshow(depth_image)
 
-% filled_img = imfill(depth_image,"holes");
-% imshow(filled_img)
+%%% Edge detection
 
+% Perform edge detection using the Canny method
+edges = edge(depth_image, 'approxcanny');
 
+% Display the original image and the detected edges
+subplot(2, 1, 1);
+imshow(depth_image);
+title('Original Image');
+
+subplot(2, 1, 2);
+imshow(edges);
+title('Edges Detected');
+% 
 % % Create a scatter plot in 3D
 % scatter3(x, y, z, 'filled');
 % xlabel('X');
