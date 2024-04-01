@@ -17,9 +17,11 @@ from    quadprog import solve_qp
 from    cv_bridge import CvBridge, CvBridgeError
 import  cv2
 
-import pyrealsense2 as rs2
-if (not hasattr(rs2, 'intrinsics')):
-    import pyrealsense2.pyrealsense2 as rs2
+
+# PYREALSENSE2 CANNOT BE PIP INSTALLED ON JETSON NANO BECAUSE IT HAS AN ARM PROCESSOR ---- "NEED TO BE BUILT FROM THE SOURCE?"
+# import pyrealsense2 as rs2
+# if (not hasattr(rs2, 'intrinsics')):
+#    import pyrealsense2.pyrealsense2 as rs2
 
 #ROS Imports
 import rospy
@@ -582,10 +584,11 @@ class GapBarrier:
             self.pix = pix
             line = '\rDepth at pixel(%3d, %3d): %7.1f(mm).' % (pix[0], pix[1], cv_image[pix[1], pix[0]])
 
-            if self.intrinsics:
-                depth = cv_image[pix[1], pix[0]]
-                result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [pix[0], pix[1]], depth)
-                line += '  Coordinate: %8.2f %8.2f %8.2f.' % (result[0], result[1], result[2])
+            # if self.intrinsics:
+            #     depth = cv_image[pix[1], pix[0]]
+            #     result = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [pix[0], pix[1]], depth)
+            #     line += '  Coordinate: %8.2f %8.2f %8.2f.' % (result[0], result[1], result[2])
+            
             if (not self.pix_grade is None):
                 line += ' Grade: %2d' % self.pix_grade
             line += '\r'
@@ -614,18 +617,18 @@ class GapBarrier:
         try:
             if self.intrinsics:
                 return
-            self.intrinsics = rs2.intrinsics()
-            self.intrinsics.width = cameraInfo.width
-            self.intrinsics.height = cameraInfo.height
-            self.intrinsics.ppx = cameraInfo.k[2]
-            self.intrinsics.ppy = cameraInfo.k[5]
-            self.intrinsics.fx = cameraInfo.k[0]
-            self.intrinsics.fy = cameraInfo.k[4]
-            if cameraInfo.distortion_model == 'plumb_bob':
-                self.intrinsics.model = rs2.distortion.brown_conrady
-            elif cameraInfo.distortion_model == 'equidistant':
-                self.intrinsics.model = rs2.distortion.kannala_brandt4
-            self.intrinsics.coeffs = [i for i in cameraInfo.d]
+            # self.intrinsics = rs2.intrinsics()
+            # self.intrinsics.width = cameraInfo.width
+            # self.intrinsics.height = cameraInfo.height
+            # self.intrinsics.ppx = cameraInfo.k[2]
+            # self.intrinsics.ppy = cameraInfo.k[5]
+            # self.intrinsics.fx = cameraInfo.k[0]
+            # self.intrinsics.fy = cameraInfo.k[4]
+            # if cameraInfo.distortion_model == 'plumb_bob':
+            #     self.intrinsics.model = rs2.distortion.brown_conrady
+            # elif cameraInfo.distortion_model == 'equidistant':
+            #     self.intrinsics.model = rs2.distortion.kannala_brandt4
+            # self.intrinsics.coeffs = [i for i in cameraInfo.d]
         except CvBridgeError as e:
             print(e)
             return   
