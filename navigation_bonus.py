@@ -2,14 +2,10 @@
 from    __future__ import print_function
 from    lib2to3.pytree import Node
 import  sys
-import  os
 import  math
 from    tokenize import Double
 import  numpy as np
 import  time
-
-#import  rclpy
-#from    rclpy.node import Node
 
 from    numpy import array, dot
 from    quadprog import solve_qp
@@ -17,20 +13,11 @@ from    quadprog import solve_qp
 from    cv_bridge import CvBridge, CvBridgeError
 import  cv2
 
-
-# PYREALSENSE2 CANNOT BE PIP INSTALLED ON JETSON NANO BECAUSE IT HAS AN ARM PROCESSOR ---- "NEED TO BE BUILT FROM THE SOURCE?"
-import pyrealsense2 as rs2
-if (not hasattr(rs2, 'intrinsics')):
-    import pyrealsense2.pyrealsense2 as rs2
-
 #ROS Imports
 import rospy
 
 from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import CameraInfo, Image
-
-# import sensor_msgs.point_cloud2 as pc2
-
 
 # CameraInfo Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/CameraInfo.html
     # std_msgs/Header header
@@ -83,10 +70,10 @@ class GapBarrier:
         self.max_depth = rospy.get_param('~max_depth')
         self.cam_baselink_offset = rospy.get_param('~cam_baselink_offset')
         # Defining a Region of Interest to save on processing time
-        self.roi_x_lower = rospy.get_param('~roi_x_lower')
-        self.roi_x_upper = rospy.get_param('~roi_x_upper')
-        self.roi_y_lower = rospy.get_param('~roi_y_lower')
-        self.roi_y_upper = rospy.get_param('~roi_y_upper')
+        self.roi_u_lower = rospy.get_param('~roi_x_lower')
+        self.roi_u_upper = rospy.get_param('~roi_x_upper')
+        self.roi_v_lower = rospy.get_param('~roi_y_lower')
+        self.roi_v_upper = rospy.get_param('~roi_y_upper')
         self.image_width = rospy.get_param('~image_width')
         self.image_height = rospy.get_param('~image_height')
 
@@ -171,16 +158,18 @@ class GapBarrier:
         self.wr0 = np.array([0.0, 1.0])
 
         # Global camera variables (initialization)
-        #self.img_height     = None
-        #self.img_width      = None
+        t = rospy.Time.from_sec(time.time())
+        self.cam_current_time = t.to_sec()
+        self.cam_prev_time = self.cam_current_time
         self.depth_image    = None
-        self.depth_points   = None
+        self.image_points   = None
         self.bridge         = CvBridge()
-        self.intrinsics     = None
-        self.pix_min_depth  = None  #used for debugging 
-        #self.pix_grade      = None #used only if confidence topic is published
-
-
+        # Used for deprojecting the depth into XYZ
+        self.intrinsics    = None
+        self.ppx = None
+        self.ppy = None
+        self.fx = None
+        self.fy = None
 
 
     # Pre-process LiDAR data    
@@ -221,7 +210,7 @@ class GapBarrier:
         return np.array(data), np.array(data2)
 
     # Refine LiDAR Data
-    def refine_lidar(self, ranges_LiDAR, points_camera):
+    def refine_lidar(self, ranges_LiDAR):
         refined_ranges = ranges_LiDAR
 
         # TO DO
@@ -353,8 +342,10 @@ class GapBarrier:
     
         self.prev_time = self.current_time
         sec_len= int(self.heading_beam_angle/data.angle_increment)
-        proc_ranges, mod_ranges = self.preprocess_lidar(ranges)     
+        proc_ranges, mod_ranges = self.preprocess_lidar(ranges) 
 
+        if self.use_camera:
+            proc_ranges = self.refine_lidar(proc_ranges)
 
         if self.drive_state == "normal":
 
@@ -590,40 +581,38 @@ class GapBarrier:
 
 
 # start of camera callback functions
-
     def imageDepthCallback(self, data):
+        t = rospy.Time.from_sec(time.time())
+        self.cam_current_time = t.to_sec()
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
             self.depth_image = cv_image
-
             # height, width = cv_image.shape
 
-            # pick one pixel among all the pixels with the closest range:
-            indices = np.array(np.where(cv_image == cv_image[cv_image > 0].min()))[:,0]
-
-            pix = (indices[1], indices[0])
-            line = '\rMin Depth at pixel(%3d, %3d): %7.1f(mm).\n' % (pix[0], pix[1], cv_image[pix[1], pix[0]])
-
+            # deproject_depth_to_point
             if self.intrinsics:
                 # Convert all pixels to points within the region of interest (ROI)
                 points = []
-                for y in range(self.roi_y_lower, self.roi_y_upper + 1):  # Inclusive range for y-axis
-                    for x in range(self.roi_x_lower, self.roi_x_upper + 1):  # Inclusive range for x-axis
-                        depth = cv_image[y, x]
-                        if depth > 0:  # Only consider valid depth values
-                            point = rs2.rs2_deproject_pixel_to_point(self.intrinsics, [x, y], depth)
-                            points.append(point)
-                
-                self.depth_points = points
+                for v in range(self.roi_v_lower, self.roi_v_upper + 1):  # Inclusive range for v-axis
+                    horizontal_points = []
+                    for u in range(self.roi_u_lower, self.roi_u_upper + 1):  # Inclusive range for u-axis
+                        depth = cv_image[v, u]
+                        if (depth>self.max_depth):
+                            depth = self.max_depth
+                        # elif (depth<self.min_depth):
+                        #     depth = 0
 
-            # Do something with the points here, for example, print them
-            # for i, point in enumerate(points):
-            #     line = f"Point {i}: X={point[0]:.2f}, Y={point[1]:.2f}, Z={point[2]:.2f}"            
-            
-            line += '\r'
-            sys.stdout.write(line)
-            sys.stdout.flush()
+                        z = depth
+                        x = (z/self.fx)*(u-self.ppx)
+                        y = (z/self.fy)*(u-self.ppy)
+
+                        # add the points that are within a hieght range
+                        if(y<self.y_cam_max and y>self.y_cam_min and z>0):
+                            horizontal_points.append([x, y, z])
+                    points.append(horizontal_points)
+
+                self.depth_points = points
 
         except CvBridgeError as e:
             print(e)
@@ -635,62 +624,18 @@ class GapBarrier:
         try:
             if self.intrinsics:
                 return
-            self.intrinsics = rs2.intrinsics()
-            self.intrinsics.width = cameraInfo.width
-            self.intrinsics.height = cameraInfo.height
-            self.intrinsics.ppx = cameraInfo.k[2]
-            self.intrinsics.ppy = cameraInfo.k[5]
-            self.intrinsics.fx = cameraInfo.k[0]
-            self.intrinsics.fy = cameraInfo.k[4]
-            if cameraInfo.distortion_model == 'plumb_bob':
-                self.intrinsics.model = rs2.distortion.brown_conrady
-            elif cameraInfo.distortion_model == 'equidistant':
-                self.intrinsics.model = rs2.distortion.kannala_brandt4
-            self.intrinsics.coeffs = [i for i in cameraInfo.d]
+            self.intrinsics = True
+            self.img_width = cameraInfo.width
+            self.img_height = cameraInfo.height
+            self.ppx = cameraInfo.k[2]
+            self.ppy = cameraInfo.k[5]
+            self.fx = cameraInfo.k[0]
+            self.fy = cameraInfo.k[4]
+
         except CvBridgeError as e:
             print(e)
             return   
         
-
-    def project_depth_onto_lidar_plane(self, depth_image):
-        # works with the CV2 extracted data from Image_msg
-        # ROI -> region of interest
-        
-        height, width = depth_image.shape
-
-        if height != self.image_height or width!=self.image_width: #check valid image read
-            return
-
-        # Initialize a vector to store minimum depth values for each vertical column
-        depth_projected = np.full(self.roi_x_upper - self.roi_x_lower, np.inf)
-
-        # Iterate over the pixels within the ROI
-        for x in range(self.roi_x_lower, self.roi_x_upper+1):
-            # Iterate over the vertical column (y-axis)
-            for y in range(self.roi_y_lower, self.roi_y_upper+1):
-
-                depth = depth_image[y, x] + self.cam_baselink_offset # Depth value at current pixel
-
-                if (depth > self.min_depth and depth < self.max_depth and depth < depth_projected[x - self.roi_x_lower]):
-                    depth_projected[x - self.roi_x_lower] = depth  # Update min depth for
-
-        return depth_projected
-
-
-
-
-    # # the topic is not published -> commented
-    # def confidenceCallback(self, data):
-    #     try:
-    #         cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
-    #         grades = np.bitwise_and(cv_image >> 4, 0x0f)
-    #         if (self.pix):
-    #             self.pix_grade = grades[self.pix[1], self.pix[0]]
-    #     except CvBridgeError as e:
-    #         print(e)
-    #         return
-
-
     def odom_callback(self, odom_msg):
         # update current speed
         self.vel = odom_msg.twist.twist.linear.x

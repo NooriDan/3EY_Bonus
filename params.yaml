@@ -187,7 +187,7 @@ stop_distance_decay: 1.0 #m
 optim_mode: 0   
 
 # Camera Parameters
-use_camera: 1     # use the camera depth data (1) else do not
+use_camera: 1     # use the camera depth data (1) else 0 -> do not
 min_depth: 0.200    # m
 max_depth: 2.000   # m
 cam_baselink_offset: 0.270 #m
