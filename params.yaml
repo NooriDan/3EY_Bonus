@@ -198,6 +198,6 @@ image_width:  848
 image_height: 480
 
 roi_x_lower: 150
-roi_x_upper: 650
-roi_y_lower: 100
-roi_y_upper: 300
+roi_x_upper: 600
+roi_y_lower: 150
+roi_y_upper: 400
