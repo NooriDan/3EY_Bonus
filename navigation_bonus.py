@@ -32,7 +32,7 @@ from sensor_msgs.msg import CameraInfo, Image
     # uint32 binning_y
     # sensor_msgs/RegionOfInterest roi
 
-# CameraInfo Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/Image.html 
+# CameraImage Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/Image.html 
     # std_msgs/Header header
     # uint32 height
     # uint32 width
@@ -627,10 +627,12 @@ class GapBarrier:
             self.intrinsics = True
             self.img_width = cameraInfo.width
             self.img_height = cameraInfo.height
-            self.ppx = cameraInfo.k[2]
-            self.ppy = cameraInfo.k[5]
-            self.fx = cameraInfo.k[0]
-            self.fy = cameraInfo.k[4]
+            self.ppx = cameraInfo.K[2]
+            self.ppy = cameraInfo.K[5]
+            self.fx = cameraInfo.K[0]
+            self.fy = cameraInfo.K[4]
+            print("CALIBERATION: found camera Info\n")
+            print(self.fx,', ', self.fy,', ', self.ppx, ', ', self.ppy, '\n')
 
         except CvBridgeError as e:
             print(e)
