@@ -76,6 +76,8 @@ class GapBarrier:
         self.roi_v_upper = rospy.get_param('~roi_y_upper')
         self.image_width = rospy.get_param('~image_width')
         self.image_height = rospy.get_param('~image_height')
+        self.y_cam_max = rospy.get_param('~y_cam_max')
+        self.y_cam_min = rospy.get_param('~y_cam_min')       
 
 
         self.max_steering_angle=rospy.get_param('~max_steering_angle')
