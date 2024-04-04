@@ -189,7 +189,8 @@ class GapBarrier:
 
     # Refine LiDAR Data
     def refine_lidar(self, ranges_LiDAR, cam_ranges, cam_angles):
-        refined_ranges = ranges_LiDAR.copy()
+        # Convert ranges_LiDAR tuple to a list
+        refined_ranges = list(ranges_LiDAR)
 
         # Convert camera angles to LiDAR indices
         lidar_indices = np.round((cam_angles) / self.ls_ang_inc).astype(int)
@@ -203,6 +204,9 @@ class GapBarrier:
             if cam_ranges[i] < ranges_LiDAR[lidar_indices[i]]:
                 # Update the LiDAR range with the camera range
                 refined_ranges[lidar_indices[i]] = cam_ranges[i]
+        
+        # OPTIONAL: Convert the refined_ranges list back to a tuple if needed
+        refined_ranges = tuple(refined_ranges)
 
         return refined_ranges
 
