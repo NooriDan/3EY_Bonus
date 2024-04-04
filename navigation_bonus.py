@@ -214,7 +214,7 @@ class GapBarrier:
         refined_ranges = ranges_LiDAR.copy()
 
         # Convert camera angles to LiDAR indices
-        lidar_indices = np.round((cam_angles - self.angle_bl) / self.ls_ang_inc).astype(int)
+        lidar_indices = np.round((cam_angles) / self.ls_ang_inc).astype(int)
 
         # Ensure the LiDAR indices are within the valid range
         lidar_indices = np.clip(lidar_indices, 0, len(ranges_LiDAR) - 1)
@@ -600,8 +600,7 @@ class GapBarrier:
 
             else:
                 self.time_ref = 0.0
-                          
-            
+        
         # Publish to driver topic
         drive_msg = AckermannDriveStamped()
         drive_msg.header.stamp = rospy.Time.now()
