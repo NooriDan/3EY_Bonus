@@ -19,32 +19,10 @@ from sensor_msgs.msg import LaserScan
 from sensor_msgs.msg import CameraInfo, Image
 
 # CameraInfo Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/CameraInfo.html
-    # std_msgs/Header header
-    # uint32 height
-    # uint32 width
-    # string distortion_model
-    # float64[] D
-    # float64[9] K
-    # float64[9] R
-    # float64[12] P
-    # uint32 binning_x
-    # uint32 binning_y
-    # sensor_msgs/RegionOfInterest roi
 
 # CameraImage Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/Image.html 
-    # std_msgs/Header header
-    # uint32 height
-    # uint32 width
-    # string encoding
-    # uint8 is_bigendian
-    # uint32 step
-    # uint8[] data
-
 
 # Header Message - Compact defintion - https://docs.ros.org/en/api/sensor_msgs/html/msg/Image.html
-    # uint32 seq
-    # time stamp
-    # string frame_id
 
 from ackermann_msgs.msg import AckermannDriveStamped, AckermannDrive
 from nav_msgs.msg import Odometry
@@ -356,7 +334,7 @@ class GapBarrier:
 
         if (self.use_camera and self.intrinsics):
             # refine the ranges
-            ranges = self.refine_lidar(ranges, self.cam_ranges, self.cam_angles)
+            ranges = self.refine_lidar(ranges, self.cam_ranges[:, 0], self.cam_ranges[:, 1])
 
             # Create a new LaserScan message for the refined ranges
             refined_ranges_msg = LaserScan()
@@ -369,7 +347,7 @@ class GapBarrier:
             refined_ranges_msg.scan_time = data.scan_time
             refined_ranges_msg.range_min = data.range_min
             refined_ranges_msg.range_max = data.range_max
-            refined_ranges_msg.ranges = proc_ranges[:,0]
+            refined_ranges_msg.ranges = ranges
 
             # Publish the refined ranges
             self.refined_lidar_pub.publish(refined_ranges_msg)
@@ -650,7 +628,7 @@ class GapBarrier:
                 # Sort the array based on angle (second column)
                 self.cam_ranges = camera_data[camera_data[:, 1].argsort()]
 
-
+                camera_data.argsort()
             self.depth_image = cv_image
 
         except CvBridgeError as e:
