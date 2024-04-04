@@ -11,7 +11,6 @@ from    numpy import array, dot
 from    quadprog import solve_qp
 
 from    cv_bridge import CvBridge, CvBridgeError
-import  cv2
 
 #ROS Imports
 import rospy
@@ -77,7 +76,9 @@ class GapBarrier:
         self.image_width = rospy.get_param('~image_width')
         self.image_height = rospy.get_param('~image_height')
         self.y_cam_max = rospy.get_param('~y_cam_max')
-        self.y_cam_min = rospy.get_param('~y_cam_min')       
+        self.y_cam_min = rospy.get_param('~y_cam_min')  
+        self.x_cam_max = rospy.get_param('~x_cam_max')  
+        self.x_cam_min = rospy.get_param('~x_cam_min')  
 
 
         self.max_steering_angle=rospy.get_param('~max_steering_angle')
@@ -122,11 +123,10 @@ class GapBarrier:
 
         rospy.Subscriber(depth_image_topic, Image, self.imageDepthCallback, queue_size=1)
         rospy.Subscriber(depth_info_topic, CameraInfo, self.imageDepthInfoCallback, queue_size=1)
-        #rospy.Subscriber(cam_meta, Image, self.cam_img_raw_callback, queue_size=1) # not sure about the "came_meta" message type
-        # confidence_topic = depth_image_topic.replace('depth', 'confidence')
-        # rospy.Subscriber(confidence_topic, Image, self.imageDepthInfoCallback, queue_size=1)
+        # Publisher for refined data
+        self.refined_lidar_pub = rospy.Publisher("refined_lidar_ranges", LaserScan, queue_size=1)
 
-        
+
         # Publishers
         self.marker_pub = rospy.Publisher("wall_markers", Marker, queue_size = 2)
         self.marker = Marker()
@@ -160,14 +160,12 @@ class GapBarrier:
         self.wr0 = np.array([0.0, 1.0])
 
         # Global camera variables (initialization)
-        t = rospy.Time.from_sec(time.time())
-        self.cam_current_time = t.to_sec()
-        self.cam_prev_time = self.cam_current_time
         self.depth_image    = None
         self.image_points   = None
+        self.cam_ranges     = None  # Valid scanned ranges and their angle in polar coordinte
         self.bridge         = CvBridge()
         # Used for deprojecting the depth into XYZ
-        self.intrinsics    = None
+        self.intrinsics = None
         self.ppx = None
         self.ppy = None
         self.fx = None
@@ -212,10 +210,21 @@ class GapBarrier:
         return np.array(data), np.array(data2)
 
     # Refine LiDAR Data
-    def refine_lidar(self, ranges_LiDAR):
-        refined_ranges = ranges_LiDAR
+    def refine_lidar(self, ranges_LiDAR, cam_ranges, cam_angles):
+        refined_ranges = ranges_LiDAR.copy()
 
-        # TO DO
+        # Convert camera angles to LiDAR indices
+        lidar_indices = np.round((cam_angles - self.angle_bl) / self.ls_ang_inc).astype(int)
+
+        # Ensure the LiDAR indices are within the valid range
+        lidar_indices = np.clip(lidar_indices, 0, len(ranges_LiDAR) - 1)
+
+        # Iterate through each LiDAR index and compare the ranges
+        for i in range(len(lidar_indices)):
+            # Check if the camera range is smaller than the LiDAR range at the corresponding index
+            if cam_ranges[i] < ranges_LiDAR[lidar_indices[i]]:
+                # Update the LiDAR range with the camera range
+                refined_ranges[lidar_indices[i]] = cam_ranges[i]
 
         return refined_ranges
 
@@ -344,11 +353,31 @@ class GapBarrier:
     
         self.prev_time = self.current_time
         sec_len= int(self.heading_beam_angle/data.angle_increment)
+
+        if (self.use_camera and self.intrinsics):
+            # refine the ranges
+            ranges = self.refine_lidar(ranges, self.cam_ranges, self.cam_angles)
+
+            # Create a new LaserScan message for the refined ranges
+            refined_ranges_msg = LaserScan()
+            refined_ranges_msg.header.stamp = rospy.Time.now()
+            refined_ranges_msg.header.frame_id = data.header.frame_id  # Assuming the frame ID is the same as the original LiDAR data
+            refined_ranges_msg.angle_min = data.angle_min
+            refined_ranges_msg.angle_max = data.angle_max
+            refined_ranges_msg.angle_increment = data.angle_increment
+            refined_ranges_msg.time_increment = data.time_increment
+            refined_ranges_msg.scan_time = data.scan_time
+            refined_ranges_msg.range_min = data.range_min
+            refined_ranges_msg.range_max = data.range_max
+            refined_ranges_msg.ranges = proc_ranges[:,0]
+
+            # Publish the refined ranges
+            self.refined_lidar_pub.publish(refined_ranges_msg)
+
+
         proc_ranges, mod_ranges = self.preprocess_lidar(ranges) 
 
-        if self.use_camera:
-            proc_ranges = self.refine_lidar(proc_ranges)
-
+       
         if self.drive_state == "normal":
 
             str_indx,end_indx=self.find_max_gap(proc_ranges)           
@@ -584,43 +613,54 @@ class GapBarrier:
 
 # start of camera callback functions
     def imageDepthCallback(self, data):
-        t = rospy.Time.from_sec(time.time())
-        self.cam_current_time = t.to_sec()
 
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, data.encoding)
-            self.depth_image = cv_image
             # height, width = cv_image.shape
 
-            # deproject_depth_to_point
             if self.intrinsics:
                 # Convert all pixels to points within the region of interest (ROI)
-                points = []
-                for v in range(self.roi_v_lower, self.roi_v_upper + 1):  # Inclusive range for v-axis
-                    horizontal_points = []
-                    for u in range(self.roi_u_lower, self.roi_u_upper + 1):  # Inclusive range for u-axis
-                        depth = cv_image[v, u]
-                        if (depth>self.max_depth):
-                            depth = self.max_depth
-                        # elif (depth<self.min_depth):
-                        #     depth = 0
+                v_range = np.arange(self.roi_v_lower, self.roi_v_upper + 1)
+                u_range = np.arange(self.roi_u_lower, self.roi_u_upper + 1)
+                u_grid, v_grid = np.meshgrid(u_range, v_range)
+                
+                depths = cv_image[v_grid, u_grid]
+                depths[depths > self.max_depth] = 0
+                depths[depths < self.min_depth] = 0
+                
+                # deproject_depth_to_point
+                x = (depths / self.fx) * (u_grid - self.ppx)
+                y = (depths / self.fy) * (v_grid - self.ppy)
+                z = depths + self.cam_baselink_offset
 
-                        z = depth
-                        x = (z/self.fx)*(u-self.ppx)
-                        y = (z/self.fy)*(u-self.ppy)
+                # filter the points out of the range
+                mask = (y < self.y_cam_max) & (y > self.y_cam_min) & (z > 0)
+                x = x[mask]
+                y = y[mask]
+                z = z[mask]
+                
+                # Calculate the polar coordinate in the camera frame from the point in the xz plane
+                cam_distances = np.sqrt(x**2 + z**2)
+                cam_angles = np.arctan2(z, x)
+                
+                # OPTIONAL: Store xyz coordinate
+                self.depth_points = np.stack([x,y,z], axis=-1) 
 
-                        # add the points that are within a hieght range
-                        if(y<self.y_cam_max and y>self.y_cam_min and z>0):
-                            horizontal_points.append([x, y, z])
-                    points.append(horizontal_points)
+               # Combine camera ranges and angles into a single numpy array
+                camera_data = np.column_stack((cam_distances, cam_angles))
+                # Sort the array based on angle (second column)
+                self.cam_ranges = camera_data[camera_data[:, 1].argsort()]
 
-                self.depth_points = points
+
+            self.depth_image = cv_image
 
         except CvBridgeError as e:
             print(e)
             return
         except ValueError as e:
+            print(e)
             return
+
 
     def imageDepthInfoCallback(self, cameraInfo):
         try:
