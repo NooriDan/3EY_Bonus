@@ -8,7 +8,7 @@ width: 0.342 # meters
 buffer_length: 5
 
 # Limits on the speed and steering angle
-max_speed: 2.0 #  meters/second
+max_speed: 2 #  meters/second
 max_steering_angle: 0.4189 # radians
 max_accel: 2.5 #7.51 # meters/second^2
 max_decel: 2.5 #8.26 # meters/second^2
@@ -136,7 +136,7 @@ publish_ground_truth_pose: true
 
 speed_to_erpm_gain: 3182.18
 speed_to_erpm_offset: 0.0
-steering_angle_to_servo_gain: -1.0647
+steering_angle_to_servo_gain: -0.9
 steering_angle_to_servo_offset: 0.5000
 
 driver_smoother_rate: 75.0 # messages/sec
@@ -153,8 +153,8 @@ emergency_brake_active: true
 # Wall Following Algorithm Parameters
 
 CenterOffset: 0
-DistanceLeft: 0.9
-DistanceRight: 0.9
+DistanceLeft: 0.8
+DistanceRight: 0.8
 TrackWall: 0
 angle_bl: rad(270*pi/180)
 angle_al: rad(200*pi/180)      
@@ -163,15 +163,15 @@ angle_ar: rad(160*pi/180)
 n_pts_l: 100
 n_pts_r: 100
 tau: 0.1 
-k_d: 4.0 
+k_d: 4 
 k_p: 3.5
-vehicle_velocity: 2.0 
+vehicle_velocity: 1.7 
 turn_velocity: 0.8
 velocity_zero: 0.3
 
 # Gap Following Algorithm Parameters
 
-safe_distance: 2.0
+safe_distance: 2
 right_beam_angle: rad(2*pi*4.0/16)
 left_beam_angle: rad(2*pi*12.0/16)
 turn_angle1: rad(pi/6)
@@ -184,12 +184,12 @@ stop_distance: 0.6 #m
 stop_distance_decay: 1.0 #m
 
 # Separating Barrier Line Optimization Mode: 0 (indepndent) 1 (parallel) 
-optim_mode: 0   
+optim_mode: 1   
 
 # Camera Parameters
 use_camera: 1     # use the camera depth data (1) else 0 -> do not
-min_depth: 200    # mm
-max_depth: 2000   # mm
+min_depth: 100    # mm
+max_depth: 5000   # mm
 cam_baselink_offset: 270 #mm
 cam_FOV_horizonal: rad(86*pi/180)   # in deg, HFOV in the datasheet
 
@@ -197,12 +197,12 @@ cam_FOV_horizonal: rad(86*pi/180)   # in deg, HFOV in the datasheet
 image_width:  848
 image_height: 480
 
-roi_x_lower: 150
-roi_x_upper: 600
+roi_x_lower: 250
+roi_x_upper: 548
 roi_y_lower: 150
-roi_y_upper: 400
+roi_y_upper: 470
 
-y_cam_max: 100  #mm
-y_cam_min: -200 #mm
-x_cam_max: 400  #mm
-x_cam_min: -400 #mm
+y_cam_max: 300  #mm
+y_cam_min: -150 #mm
+x_cam_max: 600  #mm
+x_cam_min: -600 #mm
