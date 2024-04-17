@@ -76,16 +76,6 @@
 
 <!-- Launch the camera node -->
 <include file="$(find realsense2_camera)/launch/rs_camera.launch">
-  <!-- <arg name="filters"                   value="hole_filling"/> -->
-  <arg name="enable_pointcloud"         value="true"/>
-  <!-- <arg name="enable_sync"               value="true"/> -->
-  <arg name="clip_distance"             value="3000"/>
-
-  <arg name="confidence_width"    value="848"/>
-  <arg name="confidence_height"   default="480"/>
-  <arg name="enable_confidence"   default="true"/>
-  <arg name="confidence_fps"      default="1"/>
-
   <arg name="depth_width"         default="848"/>
   <arg name="depth_height"        default="480"/>
   <arg name="enable_depth"        default="true"/>

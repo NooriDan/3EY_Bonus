@@ -191,18 +191,17 @@ use_camera: 1     # use the camera depth data (1) else 0 -> do not
 min_depth: 100    # mm
 max_depth: 5000   # mm
 cam_baselink_offset: 270 #mm
-cam_FOV_horizonal: rad(86*pi/180)   # in deg, HFOV in the datasheet
 
 # the following are defined in number of pixels
 image_width:  848
 image_height: 480
 
-roi_x_lower: 250
-roi_x_upper: 548
-roi_y_lower: 150
-roi_y_upper: 470
+roi_u_lower: 250
+roi_u_upper: 548
+roi_v_lower: 150
+roi_v_upper: 470
 
-y_cam_max: 300  #mm
+y_cam_max: 100  #mm
 y_cam_min: -150 #mm
 x_cam_max: 600  #mm
 x_cam_min: -600 #mm

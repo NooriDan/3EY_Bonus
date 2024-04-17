@@ -4,19 +4,19 @@ clc
 
 %image_rect_raw = load("rect_WALLS.txt");
 %image_rect_raw = load("image_rect_raw.txt");
-image_rect_raw = load("Ready_Data/April2_box60cm.txt");
+image_rect_raw = load("Ready_Data/April2_box30cm.txt");
 
 
 height = 480;
 width = 848;
 
-max_distance = 2000;            % in mm
+max_distance = 2500;            % in mm
 min_noneZero_distance = 100;    % in mm
 
-roi_x_lower = 100;
+roi_x_lower = 200;
 roi_x_upper = 600;
-roi_y_lower = 150;
-roi_y_upper = 400;
+roi_y_lower = 250;
+roi_y_upper = 480;
 
 markerSize = 1;
 
@@ -86,28 +86,28 @@ z_cam = zeros(1, height*width);
 index = 1;
 
 % Project the depth and pixels to xyz coordinates (inefficient)
-% for v = 1:height
-%     for u = 1:width
-%         P_frame = [u v 1];
-%         z = depth_image(v, u);
-%         P_cam = K_inv*(z*P_frame');
-%         x_cam(index) = P_cam(1);
-%         y_cam(index) = P_cam(2);
-%         z_cam(index) = P_cam(3);
-%         index = index +1;
-%     end
-% end
-
-% % Project the depth and pixels to xyz coordinates (efficient)
 for v = 1:height
     for u = 1:width
+        P_frame = [u v 1];
         z = depth_image(v, u);
-        x_cam(index) = (z/fx)*(u-cx);
-        y_cam(index) = (z/fy)*(v-cy);
-        z_cam(index) = z;
+        P_cam = K_inv*(z*P_frame');
+        x_cam(index) = P_cam(1);
+        y_cam(index) = P_cam(2);
+        z_cam(index) = P_cam(3);
         index = index +1;
     end
 end
+
+% % Project the depth and pixels to xyz coordinates (efficient)
+% for v = 1:height
+%     for u = 1:width
+%         z = depth_image(v, u);
+%         x_cam(index) = (z/fx)*(u-cx);
+%         y_cam(index) = (z/fy)*(v-cy);
+%         z_cam(index) = z;
+%         index = index +1;
+%     end
+% end
 
 subplot(2,2,2)
 scatter3(x_cam, y_cam, z_cam, markerSize)
